@@ -10,9 +10,13 @@ LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 #define MODE_NORM_MAX 1
 #define MODE_AUTO_READY 900
 #define MODE_AUTO_P01_READY 901
-#define MODE_AUTO_MAX 901
+#define MODE_AUTO_P02_READY 902
+#define MODE_AUTO_P03_READY 903
+#define MODE_AUTO_MAX 903
 #define MODE_AUTO 9900  // autopilot-ready
 #define MODE_AUTO_P01 9901
+#define MODE_AUTO_P02 9902
+#define MODE_AUTO_P03 9903
 #define MODE_AUTO_OFFSET  (MODE_AUTO-MODE_AUTO_READY)
 #define MODE_MAX 2
 int mode;

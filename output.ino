@@ -14,11 +14,8 @@ void output() {
  * D Add state to move to P90, R0, H90 attitude, (or just SAS prograde?) during 1st stage?
  * D Make SAS target retrograde on re-entry
  * - Split into programs:
- *  * P01 - Launch, roll to 45 deg and burn until APO 80000
- *    - this doesn't quite work yet - first stage runs out of fuel before APO 80k reached, bigger stage?
- *  
- *  
- *  - P04 - Circularise Orbit at 80000
+ *  D P01 - Launch, roll to 45 deg and burn until APO 80000
+ *  * P02 - Circularise Orbit at 80000
  *  - P05 - Complete 2 orbits
  *  - P06 - Reentry burn
  *  - P07 - Final stage, reentry and parachute
@@ -115,11 +112,230 @@ void AutoPilot_P01()
           attitude_count=0;
         }
         break;
-    case 8:
+      case 8:
+        // Main engine fuel exhausted or target apoapsis reached
         CPacket.Yaw=0;
+        CPacket.Roll=0;
+        CPacket.Pitch=0;
+        if (VData.AP>=80000)
+          CPacket.Throttle=0;
+        state_inc_time=millis()+100;
+        break;
+      case 9:
+        // Stage 3 - detach main engine
+        MainControls(STAGE,HIGH);
+        state_inc_time=millis()+1000;
+        break;
+      case 10:
+        // Stage 3 complete
+        MainControls(STAGE,LOW);
+        state_inc_time=millis()+1000;
+        break;
+      case 11:
+        // Stage 2 - start orbital engine
+        MainControls(STAGE,HIGH);
+        state_inc_time=millis()+1000;
+        break;
+      case 12:
+        // Stage 2 complete
+        // Target pitch 15 degrees
+        MainControls(STAGE,LOW);
+        if (VData.LiquidFuelS<0.01 || VData.AP>=80000)
+          state_inc_time=millis()+1000;
+        if (VData.AP>=80000)
+          CPacket.Throttle=0;
+        if (VData.Pitch>=45)
+        {
+          CPacket.Yaw=500;
+          CPacket.Roll=0;
+          CPacket.Pitch=0;
+          attitude_count=0;
+        }
+        else
+        {
+          CPacket.Yaw=0;
+          CPacket.Roll=0;
+          CPacket.Pitch=0;
+          attitude_count=0;
+        }
+        break;
+      case 13:
         state=0;
         mode=0;
+    }
+  }
+  /*
+  else
+    snprintf(line2,17," AWAITING  DATA ");
+  */
+  if (line2[0]=='\0')
+  {
+    dispValue(VData.Pitch,0,buf1,3,false,false);
+    dispValue(VData.Roll,0,buf2,3,false,false);
+    dispValue(VData.Heading,0,buf3,3,true,false);
+    snprintf(line2,17,"P%4s R%4s H%3s",buf1,buf2,buf3);
+  }
+  lcd.clear();
+  snprintf(line1,17,"STATE%2d ST%d/%d",state,VData.CurrentStage,VData.TotalStage);
+  lcd.print(line1);
+  lcd.setCursor(0,1);
+  lcd.print(line2);
+  
+}
+
+void AutoPilot_P02()
+{
+  static int state=0;
+  static long state_inc_time=0;
+  static long wait_time;
+  static int attitude_state=0;
+  static int attitude_count=0;
+  char line1[17];
+  char line2[17];
+  char buf1[17];
+  char buf2[17];
+  char buf3[17];
+  float diff;
+  line2[0]='\0';
+
+  if (state_inc_time!=0)
+  {
+    if (millis()>state_inc_time)
+    {
+      state_inc_time=0;
+      state++;
+    }
+  }
+  else
+  {
+    switch (state)
+    {
+      case 0:
+        // Switch on SAS, and set to retrograde, then wait 3s
+        MainControls(SAS, HIGH);
+        setSASMode(SMPrograde); //setting SAS mode
+        state_inc_time=millis()+3000;
         break;
+      case 1:
+        // Wait until time to apoapsis <30s
+        if (VData.TAp<30)
+        {
+          CPacket.Throttle=1000;
+          state_inc_time=millis()+1;
+        }
+        break;
+      case 2:
+        // Now control burn according to TAp, turning off when >30 and on when <10
+        diff=VData.AP-VData.PE;
+        if (diff<1000)
+        {
+          CPacket.Throttle=1000;
+          state_inc_time=millis()+1;
+        }
+        else if (VData.TAp>30)
+        {
+          CPacket.Throttle=0;
+        }
+        else if (VData.TAp<10)
+        {
+          // Set throttle according to how much burn left to go
+          if (diff>20000)
+            CPacket.Throttle=1000;
+          else if (diff>10000)
+            CPacket.Throttle=500;
+          else if (diff>5000)
+            CPacket.Throttle=200;
+          else
+            CPacket.Throttle=100;
+        }
+        break;
+      case 3:
+        state=0;
+        mode=0;
+    }
+  }
+  /*
+  else
+    snprintf(line2,17," AWAITING  DATA ");
+  */
+  if (line2[0]=='\0')
+  {
+    dispValue(VData.Pitch,0,buf1,3,false,false);
+    dispValue(VData.Roll,0,buf2,3,false,false);
+    dispValue(VData.Heading,0,buf3,3,true,false);
+    snprintf(line2,17,"P%4s R%4s H%3s",buf1,buf2,buf3);
+  }
+  lcd.clear();
+  snprintf(line1,17,"STATE%2d ST%d/%d",state,VData.CurrentStage,VData.TotalStage);
+  lcd.print(line1);
+  lcd.setCursor(0,1);
+  lcd.print(line2);
+  
+}
+
+void AutoPilot_P03()
+{
+  static int state=0;
+  static long state_inc_time=0;
+  static long wait_time;
+  static int attitude_state=0;
+  static int attitude_count=0;
+  char line1[17];
+  char line2[17];
+  char buf1[17];
+  char buf2[17];
+  char buf3[17];
+  line2[0]='\0';
+
+  if (state_inc_time!=0)
+  {
+    if (millis()>state_inc_time)
+    {
+      state_inc_time=0;
+      state++;
+    }
+  }
+  else
+  {
+    switch (state)
+    {
+      case 0:
+        // Switch on SAS, and set to retrograde, then wait 3s
+        MainControls(SAS, HIGH);
+        setSASMode(SMRetroGrade); //setting SAS mode
+        state_inc_time=millis()+3000;
+        break;
+      case 1:
+        // Burn 50% until periapsis <40k
+        CPacket.Throttle=500;
+        state_inc_time=millis()+1;
+        break;
+      case 2:
+        if (VData.PE<40000)
+        {
+          CPacket.Throttle=0;
+          state_inc_time=millis()+1;
+        }
+        break;
+      case 3:
+        MainControls(STAGE,HIGH);   // jettison engine
+        state_inc_time=millis()+1000;
+        break;
+      case 4:
+        MainControls(STAGE,LOW);
+        state_inc_time=millis()+1000;
+        break;
+      case 5:
+        if (VData.Alt<7000)
+        {
+          MainControls(STAGE,HIGH);   // deploy chute
+          state_inc_time=millis()+1000;
+        }
+        break;
+      case 6:
+        MainControls(STAGE,LOW);
+        state=0;
+        mode=0;
     }
   }
   /*
@@ -354,6 +570,10 @@ void controls() {
       AutoPilot();
     else if (mode==MODE_AUTO_P01)
       AutoPilot_P01();
+    else if (mode==MODE_AUTO_P02)
+      AutoPilot_P02();
+    else if (mode==MODE_AUTO_P03)
+      AutoPilot_P03();
     else if (mode>=MODE_AUTO_READY && !digitalRead(AUTOPIN))
     {
       mode+=MODE_AUTO_OFFSET;

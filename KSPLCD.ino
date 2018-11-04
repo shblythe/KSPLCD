@@ -12,11 +12,13 @@ LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 #define MODE_AUTO_P01_READY 901
 #define MODE_AUTO_P02_READY 902
 #define MODE_AUTO_P03_READY 903
-#define MODE_AUTO_MAX 903
+#define MODE_AUTO_P04_READY 904
+#define MODE_AUTO_MAX 904
 #define MODE_AUTO 9900  // autopilot-ready
 #define MODE_AUTO_P01 9901
 #define MODE_AUTO_P02 9902
 #define MODE_AUTO_P03 9903
+#define MODE_AUTO_P04 9904
 #define MODE_AUTO_OFFSET  (MODE_AUTO-MODE_AUTO_READY)
 #define MODE_MAX 2
 int mode;
@@ -148,8 +150,8 @@ struct VesselData
     uint32_t MissionTime;   //38
     float deltaTime;        //39
     float VOrbit;           //40
-    uint32_t MNTime;        //41
-    float MNDeltaV;         //42
+    uint32_t MNTime;        //41  Time to next node (s) [0 when no node]
+    float MNDeltaV;         //42  Delta V for next node (m/s) [0 when no node]
     float Pitch;            //43
     float Roll;             //44
     float Heading;          //45

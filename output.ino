@@ -16,9 +16,10 @@ void output() {
  * - Split into programs:
  *  D P01 - Launch, roll to 45 deg and burn until APO 80000
  *  * P02 - Circularise Orbit at 80000
- *  - P05 - Complete 2 orbits
- *  - P06 - Reentry burn
- *  - P07 - Final stage, reentry and parachute
+ *    - improve with more accurate calculations of max burn time
+ *      - use remaining fuel mass
+ *  * P03 - Reentry burn, reentry and chute
+ *    - retest since radar alt change
  */
 void AutoPilot_P01()
 {
@@ -190,6 +191,14 @@ void AutoPilot_P02()
   static long wait_time;
   static int attitude_state=0;
   static int attitude_count=0;
+  static float max_dt_burn;
+  const float mu=3.5316e12; // Kerbin gravitational parameter 3.5316x10^12 m^3/s^2
+  const float body_radius=600000.0; // Kerbin 600000m
+  float r_pe;  // Have to add radius of Kerbin, as this is from centre not surface
+  float r_ap;
+  float dv_burn;
+  const float mass=5000;  // K1 when staged down to LV-909, approx 5t
+  const float force=60000;  // LV-909, 60kN @ Vac.
   char line1[17];
   char line2[17];
   char buf1[17];
@@ -215,10 +224,19 @@ void AutoPilot_P02()
         MainControls(SAS, HIGH);
         setSASMode(SMPrograde); //setting SAS mode
         state_inc_time=millis()+3000;
+        // Calculations from https://www.reddit.com/r/KerbalAcademy/comments/1zn3fu/how_much_deltav_do_i_need_for_circularizing_an/
+        // and https://www.reddit.com/r/KerbalAcademy/comments/1oremg/q_is_there_a_way_to_manually_calculate_burn_time/
+        r_pe=VData.PE+body_radius;  // Have to add radius of Kerbin, as this is from centre not surface
+        r_ap=VData.AP+body_radius;
+        dv_burn=sqrt(mu/r_ap)-sqrt((r_pe*mu)/(r_ap*(r_pe+r_ap)/2));
+        max_dt_burn=dv_burn*mass/force; // burn length in seconds
         break;
       case 1:
-        // Wait until time to apoapsis <30s
-        if (VData.TAp<30)
+        // Wait until time to apoapsis < half max burn time
+        dispValue(max_dt_burn,0,buf1,7,false,false);
+        dispValue(VData.TAp,0,buf2,7,false,false);
+        snprintf(line2,17,"%7s %7s",buf1,buf2);
+        if (VData.TAp<max_dt_burn/2 || VData.TAp>15*60) // Burn if we're within, or we've overshot
         {
           CPacket.Throttle=1000;
           state_inc_time=millis()+1;
@@ -227,16 +245,17 @@ void AutoPilot_P02()
       case 2:
         // Now control burn according to TAp, turning off when >30 and on when <10
         diff=VData.AP-VData.PE;
-        if (diff<1000)
-        {
-          CPacket.Throttle=1000;
-          state_inc_time=millis()+1;
-        }
-        else if (VData.TAp>30)
+        if (VData.TAp>max_dt_burn/2 && VData.TAp<15*60)
         {
           CPacket.Throttle=0;
+          state=0;
         }
-        else if (VData.TAp<10)
+        else if (diff<1000)
+        {
+          CPacket.Throttle=0;
+          state_inc_time=millis()+1;
+        }
+        else
         {
           // Set throttle according to how much burn left to go
           if (diff>20000)
@@ -257,7 +276,6 @@ void AutoPilot_P02()
   /*
   else
     snprintf(line2,17," AWAITING  DATA ");
-  */
   if (line2[0]=='\0')
   {
     dispValue(VData.Pitch,0,buf1,3,false,false);
@@ -265,6 +283,7 @@ void AutoPilot_P02()
     dispValue(VData.Heading,0,buf3,3,true,false);
     snprintf(line2,17,"P%4s R%4s H%3s",buf1,buf2,buf3);
   }
+  */
   lcd.clear();
   snprintf(line1,17,"STATE%2d ST%d/%d",state,VData.CurrentStage,VData.TotalStage);
   lcd.print(line1);
@@ -326,7 +345,7 @@ void AutoPilot_P03()
         state_inc_time=millis()+1000;
         break;
       case 5:
-        if (VData.Alt<7000)
+        if (VData.RAlt<7000)  // Use radar altitude for chute deploy in case we're over mountains
         {
           MainControls(STAGE,HIGH);   // deploy chute
           state_inc_time=millis()+1000;
